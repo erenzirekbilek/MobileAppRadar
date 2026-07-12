@@ -1,5 +1,11 @@
 # AppRadar — Competitor Intelligence
 
+## Görseller
+
+| Ana Sayfa | AI Analysis | Logs |
+|-----------|-------------|------|
+| ![Ana Sayfa](Proje-Görselleri/Ana-SAYFA.png) | ![AI Analysis](Proje-Görselleri/AI%20Analaysis.png) | ![Logs](Proje-Görselleri/Logs.png) |
+
 ## Kurulum (1 dakika)
 
 ### Windows
