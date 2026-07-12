@@ -1,0 +1,7 @@
+{
+  "groqKey": "",
+  "apifyKey": "",
+  "groqModel": "llama-3.3-70b-versatile",
+  "gpActor": "tri_angle/google-play-reviews-scraper",
+  "asActor": "nguyend59/app-store-reviews-scraper"
+}
