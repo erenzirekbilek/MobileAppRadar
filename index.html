@@ -410,6 +410,9 @@ tailwind.config = {
             </select>
           </div>
 
+          <div class="section-hd">Admin Token</div>
+          <div class="fg"><label class="lbl">Sunucu Erişim Token'ı (Railway ADMIN_TOKEN)</label><input class="inp" id="adminToken" type="password" placeholder="token gir..." onchange="localStorage.setItem('adminToken', this.value.trim())"/></div>
+
           <div class="section-hd" style="margin-top:20px">Groq API</div>
           <div class="fg"><label class="lbl">API Key</label><input class="inp" id="groqKey" type="password" placeholder="gsk_..."/></div>
           <div class="fg">
@@ -464,12 +467,19 @@ tailwind.config = {
 </div><!-- end flex wrapper -->
 
 <script>
-const API = 'http://localhost:5000';
+const API = '';
 let reviews = [];
 let chatMsgs = [];
 
+function authHeaders() {
+  const t = localStorage.getItem('adminToken') || '';
+  return t ? { 'Authorization': `Bearer ${t}` } : {};
+}
+
 window.onload = async () => {
   log('info', 'AppRadar AI Suite başlatıldı');
+  const savedToken = localStorage.getItem('adminToken');
+  if (savedToken) document.getElementById('adminToken').value = savedToken;
   await loadStatus();
   loadCategory('diet');
   await loadSavedAppInfo();
@@ -535,7 +545,7 @@ async function saveSettings() {
     myAppTarget: document.getElementById('myAppTarget').value.trim(),
     myAppWeakness: document.getElementById('myAppWeakness').value.trim(),
   };
-  await fetch(`${API}/api/config`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+  await fetch(`${API}/api/config`, { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body:JSON.stringify(data) });
   await loadStatus();
   log('ok', `Settings kaydedildi (engine: ${data.scrapeEngine})`);
   const msg = document.getElementById('saveMsg');
@@ -562,7 +572,7 @@ async function handleMdUpload(input) {
   log('info', `MD dosyası okundu: ${file.name} (${text.length} karakter)`);
   const prompt = `Aşağıda bir mobil uygulama README veya PRD dosyası var. Bunu analiz et:\n\n${truncated}\n\nŞunu döndür (SADECE JSON, başka bir şey yazma):\n{"appName":"uygulamanın adı","category":"ana kategori","description":"2 cümlelik özet","targetAudience":"hedef kitle","keyFeatures":["özellik1","özellik2","özellik3"],"competitors":[{"name":"Rakip App Adı","packageId":"com.example.app","reason":"neden rakip"},{"name":"Rakip 2","packageId":"com.example.app2","reason":"neden"},{"name":"Rakip 3","packageId":"com.example.app3","reason":"neden"},{"name":"Rakip 4","packageId":"com.example.app4","reason":"neden"},{"name":"Rakip 5","packageId":"com.example.app5","reason":"neden"}],"marketingAngle":"en güçlü marketing açısı"}`;
   try {
-    const r = await fetch(`${API}/api/groq`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.3, max_tokens:1000 }) });
+    const r = await fetch(`${API}/api/groq`, { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body:JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.3, max_tokens:1000 }) });
     const data = await r.json();
     const raw = data.choices?.[0]?.message?.content || '';
     const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
@@ -577,7 +587,7 @@ async function handleMdUpload(input) {
     status.innerHTML = `✓ <strong>${parsed.appName}</strong> — ${parsed.category}<br>💡 ${parsed.marketingAngle}<br><span style="opacity:.7">${parsed.competitors.length} rakip tespit edildi</span>`;
     document.getElementById('mdFileName').textContent = '✓ ' + file.name;
     log('ok', `AI analiz tamamlandı: ${parsed.competitors.length} rakip`);
-    await fetch(`${API}/api/config`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ myAppName:parsed.appName, myAppCategory:parsed.category, myAppFeatures:parsed.keyFeatures.map(f=>'- '+f).join('\n'), myAppTarget:parsed.targetAudience, myAppMdContent:truncated }) });
+    await fetch(`${API}/api/config`, { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body:JSON.stringify({ myAppName:parsed.appName, myAppCategory:parsed.category, myAppFeatures:parsed.keyFeatures.map(f=>'- '+f).join('\n'), myAppTarget:parsed.targetAudience, myAppMdContent:truncated }) });
   } catch(e) {
     document.getElementById('mdFileName').textContent = '❌ Hata: ' + file.name;
     log('err', 'MD analiz hatası: ' + e.message);
@@ -607,7 +617,7 @@ async function startScraping() {
   log('info', `Scraping: ${appId}`);
   try {
     const body = { platform: document.getElementById('platform').value, appId, maxReviews: parseInt(document.getElementById('maxReviews').value)||50, country: document.getElementById('country').value, sortBy: document.getElementById('sortBy').value };
-    const r = await fetch(`${API}/api/scrape`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const r = await fetch(`${API}/api/scrape`, { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body:JSON.stringify(body) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Scraping başarısız');
     log('ok', `${data.length} item çekildi`);
@@ -630,7 +640,7 @@ async function tagReviews(sample) {
   const texts = sample.map((r,i)=>`[${i}] (${r.rating}★) ${r.text.slice(0,200)}`).join('\n');
   const prompt = `Şu app reviewlarını analiz et. SADECE JSON array döndür:\n[{"index":0,"sentiment":"positive|negative|neutral","tags":["UI","fiyat","özellik","bug","içerik"],"insight":"1 cümle marketing insight TR"}]\n\nReviewlar:\n${texts}`;
   try {
-    const r = await fetch(`${API}/api/groq`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.2, max_tokens:2000 }) });
+    const r = await fetch(`${API}/api/groq`, { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body:JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.2, max_tokens:2000 }) });
     const data = await r.json();
     const txt = data.choices?.[0]?.message?.content||'';
     const parsed = JSON.parse(txt.replace(/```json|```/g,'').trim());
@@ -638,6 +648,8 @@ async function tagReviews(sample) {
     log('ok', `${parsed.length} review etiketlendi`);
   } catch(e) { log('warn','AI tagging: '+e.message); }
 }
+
+function esc(s) { return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function renderReviews() {
   const body = document.getElementById('resultsBody');
@@ -651,14 +663,14 @@ function renderReviews() {
     const stars = '★'.repeat(r.rating)+'☆'.repeat(5-r.rating);
     const chipCls = r.sentiment==='positive'?'chip-pos':r.sentiment==='negative'?'chip-neg':'chip-neu';
     const chipLbl = r.sentiment ? r.sentiment.toUpperCase() : 'UNTAGGED';
-    const tagHtml = (r.tags||[]).map(t => { const tc = t==='UI'?'chip-ui':t==='bug'?'chip-neg':t==='özellik'?'chip-feat':'chip-tag'; return `<span class="chip ${tc}" style="font-size:10px;padding:2px 8px;margin:2px">${t}</span>`; }).join('');
+    const tagHtml = (r.tags||[]).map(t => { const tc = t==='UI'?'chip-ui':t==='bug'?'chip-neg':t==='özellik'?'chip-feat':'chip-tag'; return `<span class="chip ${tc}" style="font-size:10px;padding:2px 8px;margin:2px">${esc(t)}</span>`; }).join('');
     return `<div class="review-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;flex-shrink:0"><span class="ms" style="font-size:16px;color:#849587">person</span></div>
           <div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e2e2e6">${r.author}</div>
-            <div style="font-size:10px;color:#849587">${r.date?new Date(r.date).toLocaleDateString('tr-TR'):''}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e2e2e6">${esc(r.author)}</div>
+            <div style="font-size:10px;color:#849587">${r.date?esc(new Date(r.date).toLocaleDateString('tr-TR')):''}</div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -666,9 +678,9 @@ function renderReviews() {
           <span class="chip ${chipCls}" style="font-size:10px">${chipLbl}</span>
         </div>
       </div>
-      <p style="font-size:13px;color:#b9cbbc;line-height:1.6;margin-bottom:10px">${r.text.slice(0,320)}${r.text.length>320?'...':''}</p>
+      <p style="font-size:13px;color:#b9cbbc;line-height:1.6;margin-bottom:10px">${esc(r.text.slice(0,320))}${r.text.length>320?'...':''}</p>
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${r.insight?'10px':'0'}">${tagHtml}</div>
-      ${r.insight?`<div class="ai-summary">AI SUMMARY: ${r.insight}</div>`:''}
+      ${r.insight?`<div class="ai-summary">AI SUMMARY: ${esc(r.insight)}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -704,8 +716,8 @@ function renderFilteredReviews(data) {
   body.innerHTML=data.map(r=>{
     const stars='★'.repeat(r.rating)+'☆'.repeat(5-r.rating);
     const chipCls=r.sentiment==='positive'?'chip-pos':r.sentiment==='negative'?'chip-neg':'chip-neu';
-    const tagHtml=(r.tags||[]).map(t=>{const tc=t==='UI'?'chip-ui':t==='bug'?'chip-neg':t==='özellik'?'chip-feat':'chip-tag';return`<span class="chip ${tc}" style="font-size:10px;padding:2px 8px;margin:2px">${t}</span>`;}).join('');
-    return`<div class="review-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:16px;color:#849587">person</span></div><div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e2e2e6">${r.author}</div><div style="font-size:10px;color:#849587">${r.date?new Date(r.date).toLocaleDateString('tr-TR'):''}</div></div></div><div style="display:flex;align-items:center;gap:8px"><span style="color:#ffb800;font-size:12px">${stars}</span><span class="chip ${chipCls}" style="font-size:10px">${r.sentiment?r.sentiment.toUpperCase():'UNTAGGED'}</span></div></div><p style="font-size:13px;color:#b9cbbc;line-height:1.6;margin-bottom:10px">${r.text.slice(0,320)}${r.text.length>320?'...':''}</p><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${r.insight?'10px':'0'}">${tagHtml}</div>${r.insight?`<div class="ai-summary">AI SUMMARY: ${r.insight}</div>`:''}</div>`;
+    const tagHtml=(r.tags||[]).map(t=>{const tc=t==='UI'?'chip-ui':t==='bug'?'chip-neg':t==='özellik'?'chip-feat':'chip-tag';return`<span class="chip ${tc}" style="font-size:10px;padding:2px 8px;margin:2px">${esc(t)}</span>`;}).join('');
+    return`<div class="review-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:16px;color:#849587">person</span></div><div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e2e2e6">${esc(r.author)}</div><div style="font-size:10px;color:#849587">${r.date?esc(new Date(r.date).toLocaleDateString('tr-TR')):''}</div></div></div><div style="display:flex;align-items:center;gap:8px"><span style="color:#ffb800;font-size:12px">${stars}</span><span class="chip ${chipCls}" style="font-size:10px">${r.sentiment?r.sentiment.toUpperCase():'UNTAGGED'}</span></div></div><p style="font-size:13px;color:#b9cbbc;line-height:1.6;margin-bottom:10px">${esc(r.text.slice(0,320))}${r.text.length>320?'...':''}</p><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${r.insight?'10px':'0'}">${tagHtml}</div>${r.insight?`<div class="ai-summary">AI SUMMARY: ${esc(r.insight)}</div>`:''}</div>`;
   }).join('');
 }
 
@@ -730,7 +742,7 @@ async function sendChat() {
   } catch(e) {}
   const sys=reviews.length?`Sen bir app store review analiz ve marketing uzmanısın. ${reviews.length} adet rakip uygulama reviewu var:\n${reviews.slice(0,30).map((r,i)=>`[${i+1}] (${r.rating}★) ${r.text.slice(0,180)}`).join('\n')}${myAppContext}\n\nTürkçe, spesifik ve actionable marketing insightları ver.`:`Sen bir app store analiz uzmanısın. Henüz review yüklenmedi.${myAppContext}`;
   try {
-    const r=await fetch(`${API}/api/groq`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'system',content:sys},...chatMsgs.slice(-8)],temperature:0.7,max_tokens:1024})});
+    const r=await fetch(`${API}/api/groq`,{method:'POST',headers:{'Content-Type':'application/json', ...authHeaders()},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'system',content:sys},...chatMsgs.slice(-8)],temperature:0.7,max_tokens:1024})});
     const data=await r.json();
     const reply=data.choices?.[0]?.message?.content||'Hata oluştu.';
     document.getElementById(typId)?.remove();
@@ -746,7 +758,7 @@ function appendMsg(cls, txt) {
   const d=document.createElement('div');
   const isUser=cls==='u';
   d.style.cssText=`display:flex;gap:10px;align-self:${isUser?'flex-end;flex-direction:row-reverse':'flex-start'};max-width:85%;`;
-  d.innerHTML=`<div style="width:30px;height:30px;border-radius:8px;background:${isUser?'rgba(0,227,139,0.15)':'rgba(167,139,250,0.15)'};display:flex;align-items:center;justify-content:center;flex-shrink:0"><span class="ms" style="font-size:16px;color:${isUser?'#00e38b':'#a78bfa'}">${isUser?'person':'smart_toy'}</span></div><div class="${isUser?'msg-bubble-user':'msg-bubble-ai'}">${txt.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
+  d.innerHTML=`<div style="width:30px;height:30px;border-radius:8px;background:${isUser?'rgba(0,227,139,0.15)':'rgba(167,139,250,0.15)'};display:flex;align-items:center;justify-content:center;flex-shrink:0"><span class="ms" style="font-size:16px;color:${isUser?'#00e38b':'#a78bfa'}">${isUser?'person':'smart_toy'}</span></div><div class="${isUser?'msg-bubble-user':'msg-bubble-ai'}">${esc(txt).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
   h.appendChild(d); h.scrollTop=h.scrollHeight;
 }
 

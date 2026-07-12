@@ -8,10 +8,21 @@ from flask import Flask, request, jsonify, send_from_directory
 import requests
 import json
 import os
+import hmac
 
 app = Flask(__name__, static_folder='.')
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
+
+def require_admin():
+    token = os.environ.get('ADMIN_TOKEN', '')
+    if not token:
+        # ADMIN_TOKEN ayarlanmadıysa (ör. lokal geliştirme) admin uçları kapalı sayılır
+        return jsonify({'error': 'ADMIN_TOKEN ayarlanmamış, admin uçları devre dışı'}), 503
+    supplied = request.headers.get('Authorization', '').replace('Bearer ', '')
+    if not hmac.compare_digest(supplied, token):
+        return jsonify({'error': 'Unauthorized'}), 401
+    return None
 
 def load_config():
     cfg = {}
@@ -64,8 +75,17 @@ def get_config():
 
 @app.route('/api/config', methods=['POST'])
 def set_config():
+    unauthorized = require_admin()
+    if unauthorized:
+        return unauthorized
+    allowed_keys = {
+        'groqKey', 'apifyKey', 'serpapiKey', 'groqModel', 'gpActor', 'asActor',
+        'scrapeEngine', 'myAppName', 'myAppCategory', 'myAppFeatures',
+        'myAppPrice', 'myAppTarget', 'myAppWeakness', 'myAppMdContent',
+    }
+    incoming = request.json or {}
     cfg = load_config()
-    cfg.update(request.json)
+    cfg.update({k: v for k, v in incoming.items() if k in allowed_keys})
     save_config(cfg)
     return jsonify({'ok': True})
 
@@ -82,6 +102,9 @@ def status():
 
 @app.route('/api/scrape', methods=['POST'])
 def scrape():
+    unauthorized = require_admin()
+    if unauthorized:
+        return unauthorized
     cfg = load_config()
     body = request.json
     app_id = body.get('appId', '').strip()
@@ -216,6 +239,9 @@ def scrape_apify(cfg, app_id, max_reviews, country, sort_by, platform):
 # ─── GROQ PROXY ──────────────────────────────────────────────────────────────
 @app.route('/api/groq', methods=['POST'])
 def groq_proxy():
+    unauthorized = require_admin()
+    if unauthorized:
+        return unauthorized
     cfg = load_config()
     groq_key = cfg.get('groqKey', '')
     if not groq_key:

@@ -43,6 +43,14 @@ python app.py
 
 ---
 
+## Deploy (Railway)
+
+1. GitHub reposunu Railway'de "Deploy from GitHub repo" ile bağla.
+2. **Variables**'a ekle:
+   - `ADMIN_TOKEN` — rastgele güçlü bir gizli metin (örn. `openssl rand -hex 32`). Bu olmadan `/api/config` (yazma), `/api/groq` ve `/api/scrape` uçları kapalı kalır.
+   - `GROQ_KEY`, `APIFY_KEY` — gerçek API key'lerin.
+3. Deploy sonrası uygulamayı açıp **Settings → Admin Token** alanına 2. adımdaki `ADMIN_TOKEN` değerini gir ve Kaydet'e bas (tarayıcıda saklanır, isteklere otomatik eklenir).
+
 ## Apify Aktörleri
 
 Varsayılan aktörler ücretsiz tier ile çalışır (~$5/ay kredi):
